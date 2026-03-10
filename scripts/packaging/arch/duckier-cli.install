@@ -1,0 +1,43 @@
+post_install() {
+    mkdir -p /var/log/duckier
+    if command -v systemctl &>/dev/null; then
+        systemctl daemon-reload
+        systemctl enable duckiervpn-daemon.service
+        systemctl start duckiervpn-daemon.service
+    fi
+}
+
+pre_upgrade() {
+    if command -v systemctl &>/dev/null; then
+        systemctl stop duckiervpn-daemon.service 2>/dev/null || true
+    fi
+}
+
+post_upgrade() {
+    if command -v systemctl &>/dev/null; then
+        systemctl daemon-reload
+        systemctl start duckiervpn-daemon.service
+    fi
+}
+
+pre_remove() {
+    # Shared daemon coexistence: only stop daemon if desktop app is NOT installed
+    if ! pacman -Q duckier &>/dev/null; then
+        if command -v systemctl &>/dev/null; then
+            systemctl stop duckiervpn-daemon.service 2>/dev/null || true
+            systemctl disable duckiervpn-daemon.service 2>/dev/null || true
+        fi
+        killall duckiervpn-daemon 2>/dev/null || true
+    else
+        echo "Desktop app (duckier) is installed — leaving daemon running."
+    fi
+}
+
+post_remove() {
+    # Only reload systemd if desktop app is NOT installed
+    if ! pacman -Q duckier &>/dev/null; then
+        if command -v systemctl &>/dev/null; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
+    fi
+}

@@ -1,0 +1,44 @@
+# Build
+/target/
+/dist/
+/binaries/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Signing credentials (NEVER commit these)
+scripts/sign-env.sh
+scripts/packaging/win/sign-env.ps1
+scripts/packaging/win/sign-env.sh
+scripts/release.sh
+
+# Build artifacts
+*.exe
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.zst
+*.tar.gz
+
+# Secrets & credentials
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Internal tooling
+commit.sh
+review.sh
+release_uploader.json
+.todo

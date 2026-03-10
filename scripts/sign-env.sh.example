@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Apple code signing and notarization environment variables.
+# Copy this file to sign-env.sh and fill in your values.
+#
+# Required: Developer ID Application certificate must be installed in Keychain.
+# Required: AuthKey .p8 file must exist at the path below.
+
+# Support both bash and zsh
+if [ -n "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ── Apple code signing ──
+export APPLE_SIGNING_IDENTITY="Developer ID Application: YOUR TEAM NAME (TEAMID)"
+export APPLE_INSTALLER_IDENTITY="Developer ID Installer: YOUR TEAM NAME (TEAMID)"
+export APPLE_TEAM_ID="YOUR_TEAM_ID"
+
+# ── Apple notarization via App Store Connect API ──
+export APPLE_API_ISSUER="your-issuer-uuid"
+export APPLE_API_KEY="YOUR_KEY_ID"
+export APPLE_API_KEY_PATH="/path/to/AuthKey_YOURKEYID.p8"
+
+# ── Windows code signing (Azure Key Vault) ──
+export AZURE_KEY_VAULT_URI="https://your-vault.vault.azure.net/"
+export AZURE_KEY_VAULT_CERTIFICATE="your-certificate-name"
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_CLIENT_ID="your-client-id"
+export AZURE_CLIENT_SECRET="your-client-secret"
+export WINDOWS_TIMESTAMP_URL="http://timestamp.digicert.com"
+export WINDOWS_APP_NAME="YourAppName"
+
+# ── Verify ──
+if [ -n "$APPLE_API_KEY_PATH" ] && [ ! -f "$APPLE_API_KEY_PATH" ]; then
+    echo "WARNING: API key file not found at $APPLE_API_KEY_PATH"
+    echo "Notarization will fail without it."
+fi
+
+echo ""
+echo "Signing environment configured:"
+echo "  Apple App Identity:       $APPLE_SIGNING_IDENTITY"
+echo "  Apple Installer Identity: $APPLE_INSTALLER_IDENTITY"
+echo "  Apple API Key:            $APPLE_API_KEY"
+if [ -n "${AZURE_CLIENT_ID:-}" ] && [ -n "${AZURE_KEY_VAULT_URI:-}" ]; then
+    echo "  Azure Key Vault:          $AZURE_KEY_VAULT_URI"
+    echo "  Azure Certificate:        $AZURE_KEY_VAULT_CERTIFICATE"
+fi
+echo ""

@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package yulengine;
+
+import "google/protobuf/empty.proto";
+
+// =============================================================================
+// VPN Daemon Service - Compatible with Python daemon
+// =============================================================================
+
+service VPN {
+    // OpenVPN operations
+    rpc OpenVPNStart (OpenVPNStartRequest) returns (stream Response);
+    rpc OpenVPNStartFromFile (OpenVPNStartFromFileRequest) returns (stream Response);
+    rpc OpenVPNStop (google.protobuf.Empty) returns (stream Response);
+    rpc OpenVPNStatus (google.protobuf.Empty) returns (stream Response);
+
+    // WireGuard operations
+    rpc WireguardStart (WireguardStartRequest) returns (stream Response);
+    rpc WireguardStop (google.protobuf.Empty) returns (stream Response);
+    rpc WireguardStatus (google.protobuf.Empty) returns (stream Response);
+
+    // ShadowSocks operations
+    rpc ShadowsocksStart (ShadowsocksStartRequest) returns (stream Response);
+    rpc ShadowsocksStop (google.protobuf.Empty) returns (stream Response);
+    rpc ShadowsocksStatus (google.protobuf.Empty) returns (stream Response);
+
+    // Kill Switch operations
+    rpc KillSwitchEnable (KillSwitchEnableRequest) returns (stream Response);
+    rpc KillSwitchDisable (google.protobuf.Empty) returns (stream Response);
+    rpc KillSwitchStatus (google.protobuf.Empty) returns (stream Response);
+
+    // System operations
+    rpc SystemPid (google.protobuf.Empty) returns (stream Response);
+    rpc SystemPong (google.protobuf.Empty) returns (stream Response);
+}
+
+// =============================================================================
+// Common Messages
+// =============================================================================
+
+message Response {
+    string command = 1;
+    bool success = 2;
+    string payload = 3;
+    bool error = 4;
+    string message = 5;
+}
+
+// =============================================================================
+// OpenVPN Messages
+// =============================================================================
+
+message OpenVPNStartRequest {
+    string resource_path = 1;
+    string config_path = 2;
+    string auth_user_pass = 3;
+    string status_path = 4;
+    string log_path = 5;
+    string file_hash = 6;
+    CliModeConfig cli_mode = 7;
+}
+
+message OpenVPNStartFromFileRequest {
+    string resource_path = 1;
+}
+
+// =============================================================================
+// ShadowSocks Messages
+// =============================================================================
+
+message ShadowsocksStartRequest {
+    string config = 1;
+    string log_file = 2;
+    string binary = 3;
+}
+
+// =============================================================================
+// Kill Switch Messages
+// =============================================================================
+
+message KillSwitchEnableRequest {
+    bool allow_lan = 1;                     // Allow LAN traffic
+    repeated string extra_api_domains = 2;  // Additional API domains to whitelist (merged with branding defaults)
+}
+
+// =============================================================================
+// CLI Mode Messages
+// =============================================================================
+
+message CliModeConfig {
+    bool enabled = 1;             // Enable CLI mode reconnection
+    string executable = 2;        // Override CLI binary (empty = branding default)
+    repeated string args = 3;     // Override args (empty = ["connect"])
+    uint32 max_retries = 4;       // Max CLI invocations (0 = default 3)
+    uint32 cooldown_seconds = 5;  // Seconds between attempts (0 = default 30)
+}
+
+// =============================================================================
+// WireGuard Messages
+// =============================================================================
+
+message WireguardStartRequest {
+    string interface_name = 1;        // e.g. "wg0" or "utun3" (auto-assigned if empty)
+    string private_key = 2;           // Base64-encoded private key
+    string address = 3;               // Tunnel address e.g. "10.6.0.30/24"
+    uint32 listen_port = 4;           // Local listen port (0 = random)
+    uint32 mtu = 5;                   // MTU (0 = default)
+    string dns = 6;                   // DNS servers comma-separated
+    repeated WireguardPeer peers = 7; // Peer configurations
+    string resource_path = 8;         // For config persistence
+    CliModeConfig cli_mode = 9;
+}
+
+message WireguardPeer {
+    string public_key = 1;            // Base64-encoded peer public key
+    string preshared_key = 2;         // Optional PSK (base64)
+    string endpoint = 3;              // "host:port"
+    repeated string allowed_ips = 4;  // e.g. ["0.0.0.0/0", "::/0"]
+    uint32 persistent_keepalive = 5;  // Seconds (0 = disabled)
+}

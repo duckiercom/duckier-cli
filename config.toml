@@ -1,0 +1,33 @@
+# ──────────────────────────────────────────────────────
+# Duckier VPN CLI — Branding & Configuration
+# ──────────────────────────────────────────────────────
+# All constants that identify the product, backend, and
+# daemon are defined here. Change these to white-label
+# the CLI for a different VPN brand.
+
+[branding]
+product_name   = "Duckier"
+binary_name    = "duckier-cli"
+daemon_name    = "duckier"
+
+[backend]
+api_url        = "https://api-vpn.duckier.com"
+frontend_url   = "https://duckier.com"
+app_id         = "b8fz0rxz3nvnv8jhsd7y9wf5ww"
+ephemeral_tld  = "ephemeral.duckier.com"
+connect_url    = "https://duckier.com/connect"
+update_url     = "https://update.duckier.com"
+
+[daemon]
+grpc_address   = "http://127.0.0.1:33820"
+# Auth token path template. {daemon_name} is replaced at runtime.
+# Linux/macOS: /var/run/{daemon_name}/auth_token
+# Windows:     %PROGRAMDATA%\{product_name}\run\auth_token
+
+[killswitch]
+# Extra domains to whitelist when kill switch is enabled
+api_domains    = ["api-vpn.duckier.com"]
+
+[storage]
+# Config directory name under XDG_CONFIG_HOME / %APPDATA%
+config_dir     = "duckier"

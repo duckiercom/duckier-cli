@@ -1,0 +1,22 @@
+# Systemd service: auto-connect VPN at boot
+# Install: systemctl enable duckier-autoconnect
+# Requires: duckiervpn-daemon.service (the VPN daemon)
+#
+# This is optional — only for headless servers that should
+# always be connected. The daemon must be running first.
+
+[Unit]
+Description=DuckierVPN Auto-Connect
+After=network-online.target duckiervpn-daemon.service
+Wants=network-online.target
+Requires=duckiervpn-daemon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/duckier-cli connect
+ExecStop=/usr/bin/duckier-cli disconnect
+
+[Install]
+WantedBy=multi-user.target

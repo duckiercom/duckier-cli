@@ -1,0 +1,53 @@
+# Windows code signing environment for CLI builds (YubiKey / hardware token).
+# Source this before building:  . .\scripts\packaging\win\sign-env.ps1
+#
+# Prerequisites:
+#   1. GlobalSign minidriver installed (makes YubiKey cert visible in cert store)
+#   2. YubiKey inserted
+#   3. Certificate thumbprint known (run the command below to find it)
+#   4. Windows SDK installed (for signtool.exe)
+
+# -- Code signing certificate --
+# Find your thumbprint:
+#   Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.HasPrivateKey } | Format-List Subject, Thumbprint, NotAfter
+# Or open certmgr.msc > Personal > Certificates > double-click > Details > Thumbprint
+$env:WINDOWS_CERT_THUMBPRINT = ""  # <-- paste your cert thumbprint here (no spaces)
+
+# Certificate store (usually "My" = Personal)
+$env:WINDOWS_CERT_STORE = "My"
+
+# RFC 3161 timestamp server
+$env:WINDOWS_TIMESTAMP_URL = "http://rfc3161timestamp.globalsign.com/advanced"
+
+# Application name embedded in signature
+$env:WINDOWS_APP_NAME = "Duckier CLI"
+
+# Optional: explicit path to signtool.exe (auto-detected from Windows SDK if not set)
+# $env:SIGNTOOL_PATH = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+
+# -- Verify setup --
+Write-Host ""
+Write-Host "Windows signing environment configured:" -ForegroundColor Cyan
+
+if ($env:WINDOWS_CERT_THUMBPRINT) {
+    $cert = Get-ChildItem -Path "Cert:\CurrentUser\$($env:WINDOWS_CERT_STORE)" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Thumbprint -eq $env:WINDOWS_CERT_THUMBPRINT }
+    if ($cert) {
+        Write-Host "  Certificate: $($cert.Subject)" -ForegroundColor Green
+        Write-Host "  Thumbprint:  $($env:WINDOWS_CERT_THUMBPRINT)" -ForegroundColor Green
+        Write-Host "  Expires:     $($cert.NotAfter)" -ForegroundColor Green
+        if ($cert.NotAfter -lt (Get-Date).AddDays(30)) {
+            Write-Host "  WARNING: Certificate expires in less than 30 days!" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  WARNING: Certificate not found in store. Is the YubiKey inserted?" -ForegroundColor Yellow
+        Write-Host "  Thumbprint:  $($env:WINDOWS_CERT_THUMBPRINT)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "  WARNING: WINDOWS_CERT_THUMBPRINT is empty - signing will be skipped" -ForegroundColor Yellow
+    Write-Host "  Run: Get-ChildItem Cert:\CurrentUser\My | Where-Object { `$_.HasPrivateKey } | Format-List Subject, Thumbprint" -ForegroundColor Yellow
+}
+
+Write-Host "  Timestamp:   $($env:WINDOWS_TIMESTAMP_URL)"
+Write-Host "  App Name:    $($env:WINDOWS_APP_NAME)"
+Write-Host ""

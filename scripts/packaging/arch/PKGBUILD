@@ -1,0 +1,23 @@
+# Maintainer: Duckier <dev@duckier.com>
+pkgname=duckier-cli
+pkgver=2.0.13
+pkgrel=1
+pkgdesc="DuckierVPN CLI — headless VPN client with daemon (WireGuard)"
+arch=('x86_64' 'aarch64')
+url="https://duckier.com"
+license=('GPL-3.0-only')
+depends=()
+install=duckier-cli.install
+source=("duckier-cli-linux-${CARCH}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir"
+    # CLI binary
+    install -Dm755 usr/bin/duckier-cli "$pkgdir/usr/bin/duckier-cli"
+    # Daemon binary
+    install -Dm755 usr/bin/duckiervpn-daemon "$pkgdir/usr/bin/duckiervpn-daemon"
+    # Systemd service
+    install -Dm644 usr/lib/systemd/system/duckiervpn-daemon.service \
+        "$pkgdir/usr/lib/systemd/system/duckiervpn-daemon.service"
+}

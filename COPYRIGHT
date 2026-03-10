@@ -1,0 +1,12 @@
+Duckier CLI Copyright Notice
+============================
+
+Copyright (C) 2026 Duckier Interactive - FZCO (Duckier, https://duckier.com)
+Copyright (C) 2026 YulEngine (https://yulengine.ru)
+
+This project is licensed under the GNU General Public License v3.0 only
+(`GPL-3.0-only`). See the `LICENSE` file for the full license text.
+
+Third-party Rust crate attributions (including author metadata and license
+expressions as declared by each crate) are listed in
+`THIRD_PARTY_NOTICES.md`.
