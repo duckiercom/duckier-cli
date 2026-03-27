@@ -18,7 +18,6 @@ Thumbs.db
 scripts/sign-env.sh
 scripts/packaging/win/sign-env.ps1
 scripts/packaging/win/sign-env.sh
-scripts/release.sh
 
 # Build artifacts
 *.exe
@@ -42,3 +41,4 @@ commit.sh
 review.sh
 release_uploader.json
 .todo
+github-push.sh

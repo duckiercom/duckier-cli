@@ -9,16 +9,18 @@
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "FileFunc.nsh"
+!include "WordFunc.nsh"
 
 ; ── Branding ──
 !define PRODUCT_NAME "Duckier CLI"
 !define PRODUCT_PUBLISHER "Duckier"
 !define PRODUCT_WEB_SITE "https://duckier.com"
-!define INSTALL_DIR_NAME "Duckier CLI"
+!define INSTALL_DIR_NAME "Duckier"
 !define CLI_EXE "duckier-cli.exe"
 !define DAEMON_EXE "duckiervpn-daemon.exe"
-!define DAEMON_SERVICE "DuckierVPNDaemon"
+!define DAEMON_SERVICE "DuckierVpnDaemon"
 !define DESKTOP_EXE "Duckier.exe"
+!define WIREGUARD_DLL "wireguard.dll"
 !define UNINSTALLER "uninstall.exe"
 
 ; ── Passed from makensis -D ──
@@ -51,19 +53,40 @@ SetCompressor /SOLID lzma
 Section "Install"
     SetOutPath "$INSTDIR"
 
-    ; Kill any running instances before installing
+    ; Kill any running CLI instances before installing
     nsExec::ExecToStack "TaskKill /IM ${CLI_EXE} /F"
-    nsExec::ExecToStack "TaskKill /IM ${DAEMON_EXE} /F"
 
-    ; Stop existing daemon service if present
-    nsExec::ExecToStack '"$SYSDIR\sc.exe" stop "${DAEMON_SERVICE}"'
-    Sleep 2000
+    ; Check if daemon service is already running (active VPN session)
+    nsExec::ExecToStack '"$SYSDIR\sc.exe" query "${DAEMON_SERVICE}"'
+    Pop $0 ; exit code
+    Pop $1 ; stdout (contains STATE line)
+    ; sc query returns 0 if the service exists
+    ; stdout contains "STATE ... RUNNING" when active
+    StrCpy $R9 "0" ; $R9 = daemon was running
+    ${If} $0 == 0
+        ; Service exists — check if it's running
+        ${WordFind} $1 "RUNNING" "E+1{" $2
+        ${IfNot} ${Errors}
+            StrCpy $R9 "1" ; daemon is running
+        ${EndIf}
+    ${EndIf}
 
-    ; Install files
+    ${If} $R9 == "0"
+        ; Daemon not running — safe to kill and replace
+        nsExec::ExecToStack "TaskKill /IM ${DAEMON_EXE} /F"
+        nsExec::ExecToStack '"$SYSDIR\sc.exe" stop "${DAEMON_SERVICE}"'
+        Sleep 2000
+    ${EndIf}
+
+    ; Install files — always update CLI; only update daemon + DLL if it wasn't running
     File "${STAGING_DIR}\${CLI_EXE}"
-    File "${STAGING_DIR}\${DAEMON_EXE}"
     File "${STAGING_DIR}\LICENSE"
     File "${STAGING_DIR}\THIRD_PARTY_NOTICES.md"
+
+    ${If} $R9 == "0"
+        File "${STAGING_DIR}\${DAEMON_EXE}"
+        File "${STAGING_DIR}\${WIREGUARD_DLL}"
+    ${EndIf}
 
     ; Write install directory to registry
     WriteRegStr HKLM "Software\${PRODUCT_NAME}" "InstallDir" "$INSTDIR"
@@ -82,19 +105,44 @@ Section "Install"
     ; Broadcast environment change so open shells pick up new PATH
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
 
-    ; ── Register daemon as Windows service ──
-    nsExec::ExecToStack '"$INSTDIR\${DAEMON_EXE}" --startup auto install'
-    Pop $0 ; exit code
-    Pop $1 ; stdout
-    ${If} $0 != 0
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Warning: Failed to register daemon service (exit code $0). The CLI may not function correctly until the daemon is installed manually."
-    ${EndIf}
+    ; ── Register and start daemon service (only if it wasn't already running) ──
+    ${If} $R9 == "0"
+        ; Check if the user opted out of running the daemon as a Windows service.
+        ; When DaemonNoService=1, skip service creation entirely — the CLI will
+        ; launch the daemon elevated (UAC) on demand instead.
+        ReadRegDWORD $R0 HKLM "SOFTWARE\${PRODUCT_PUBLISHER}" "DaemonNoService"
+        ${If} $R0 == 1
+            ; User prefers UAC-elevated daemon — stop & remove service if it exists
+            nsExec::ExecToLog '"$SYSDIR\sc.exe" stop "${DAEMON_SERVICE}"'
+            nsExec::ExecToLog '"$SYSDIR\sc.exe" delete "${DAEMON_SERVICE}"'
+        ${Else}
+            ; Remove stale service entry if present
+            nsExec::ExecToStack '"$SYSDIR\sc.exe" delete "${DAEMON_SERVICE}"'
+            Pop $0
+            Pop $1
 
-    nsExec::ExecToStack '"$INSTDIR\${DAEMON_EXE}" start'
-    Pop $0
-    Pop $1
-    ${If} $0 != 0
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Warning: Failed to start daemon service (exit code $0). Try rebooting or running: $\"$INSTDIR\${DAEMON_EXE}$\" start"
+            ; Write a temp batch file to avoid NSIS quote-escaping issues with sc binPath
+            FileOpen $R1 "$TEMP\duckier-svc.bat" w
+            FileWrite $R1 '@echo off$\r$\n'
+            FileWrite $R1 'sc create ${DAEMON_SERVICE} binPath= "$INSTDIR\${DAEMON_EXE} --service" start= auto$\r$\n'
+            FileWrite $R1 'sc failure ${DAEMON_SERVICE} reset= 86400 actions= restart/5000/restart/10000/restart/30000$\r$\n'
+            FileClose $R1
+            nsExec::ExecToStack '"$SYSDIR\cmd.exe" /c "$TEMP\duckier-svc.bat"'
+            Pop $0
+            Pop $1
+            Delete "$TEMP\duckier-svc.bat"
+
+            ${If} $0 != 0
+                MessageBox MB_OK|MB_ICONEXCLAMATION "Warning: Failed to register daemon service (exit code $0). The CLI may not function correctly until the daemon is installed manually."
+            ${EndIf}
+
+            nsExec::ExecToStack '"$SYSDIR\sc.exe" start "${DAEMON_SERVICE}"'
+            Pop $0
+            Pop $1
+            ${If} $0 != 0
+                MessageBox MB_OK|MB_ICONEXCLAMATION "Warning: Failed to start daemon service (exit code $0). Try rebooting or running: $\"$INSTDIR\${DAEMON_EXE}$\" start"
+            ${EndIf}
+        ${EndIf}
     ${EndIf}
 
     ; ── Create uninstaller ──
@@ -165,6 +213,7 @@ Section "Uninstall"
         nsExec::ExecToStack '"$SYSDIR\sc.exe" delete "${DAEMON_SERVICE}"'
         nsExec::ExecToStack "TaskKill /IM ${DAEMON_EXE} /F"
         Delete "$INSTDIR\${DAEMON_EXE}"
+        Delete "$INSTDIR\${WIREGUARD_DLL}"
     ${Else}
         ; Desktop app is installed — leave daemon service running
     ${EndIf}
@@ -189,6 +238,10 @@ Section "Uninstall"
     ; ── Remove registry entries ──
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
     DeleteRegKey HKLM "Software\${PRODUCT_NAME}"
+
+    ; Clean up daemon mode registry key
+    DeleteRegValue HKLM "SOFTWARE\${PRODUCT_PUBLISHER}" "DaemonNoService"
+    DeleteRegKey /ifempty HKLM "SOFTWARE\${PRODUCT_PUBLISHER}"
 
     ; User config at %APPDATA%\duckier\ is intentionally preserved
 SectionEnd

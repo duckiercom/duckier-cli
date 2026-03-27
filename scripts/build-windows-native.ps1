@@ -165,6 +165,7 @@ Write-Host "  Standalone: dist\windows\duckier-cli.exe"
 # Stage files for NSIS installer
 Copy-Item $CliBin "$Staging\duckier-cli.exe"
 Copy-Item $DaemonBin "$Staging\duckiervpn-daemon.exe"
+Copy-Item "$CliDir\scripts\packaging\win\wireguard.dll" "$Staging\"
 Copy-Item "$CliDir\LICENSE" "$Staging\"
 Copy-Item "$CliDir\THIRD_PARTY_NOTICES.md" "$Staging\"
 

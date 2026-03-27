@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use hyper::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::debug;
 
@@ -48,23 +48,19 @@ impl ApiClient {
         }
     }
 
-    fn build_headers(&self) -> HeaderMap {
-        let mut headers = HeaderMap::new();
+    fn build_headers(&self) -> HashMap<String, String> {
+        let mut headers = HashMap::new();
 
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert("x-app-id", HeaderValue::from_static(brand::APP_ID));
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+        headers.insert("x-app-id".to_string(), brand::APP_ID.to_string());
 
         let req_id = REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-        if let Ok(header_value) = HeaderValue::from_str(&req_id.to_string()) {
-            headers.insert("x-request-id", header_value);
-        }
+        headers.insert("x-request-id".to_string(), req_id.to_string());
 
         let host = get_hostname();
-        if let Ok(header_value) = HeaderValue::from_str(&host) {
-            headers.insert("x-device", header_value);
-        }
+        headers.insert("x-device".to_string(), host);
 
-        headers.insert("x-os", HeaderValue::from_static(detect_os()));
+        headers.insert("x-os".to_string(), detect_os().to_string());
 
         let raw_id = device_id();
         let auth = load_auth();
@@ -78,19 +74,13 @@ impl ApiClient {
         } else {
             raw_id
         };
-        if let Ok(header_value) = HeaderValue::from_str(&effective_id) {
-            headers.insert("x-id", header_value);
-        }
+        headers.insert("x-id".to_string(), effective_id);
 
         let username = get_username();
-        if let Ok(header_value) = HeaderValue::from_str(&username) {
-            headers.insert("x-name", header_value);
-        }
+        headers.insert("x-name".to_string(), username);
 
         if !auth.auth_token.is_empty() {
-            if let Ok(header_value) = HeaderValue::from_str(&auth.auth_token) {
-                headers.insert("x-auth-token", header_value);
-            }
+            headers.insert("x-auth-token".to_string(), auth.auth_token);
         }
 
         headers
@@ -127,22 +117,21 @@ impl ApiClient {
         env!("CARGO_PKG_VERSION")
     }
 
-    pub async fn post(&self, path: &str, body: &Value) -> Result<Value> {
+    pub fn post(&self, path: &str, body: &Value) -> Result<Value> {
         let url = format!("{}{}", self.base_url, path);
         debug!("POST {}", url);
 
         let resp = self
             .client
-            .post_json(&url, self.build_headers(), body)
-            .await
+            .post_json(&url, &self.build_headers(), body)
             .with_context(|| format!("failed to send POST {}", url))?;
 
-        let status = resp.status();
+        let status = resp.status_code();
         let text = resp
             .text()
             .with_context(|| format!("failed to read response body from POST {}", url))?;
 
-        if !status.is_success() {
+        if !resp.is_success() {
             if let Ok(error_body) = serde_json::from_str::<Value>(&text) {
                 if error_body.get("error").is_some() {
                     return Err(anyhow!(
@@ -160,22 +149,21 @@ impl ApiClient {
         Ok(json)
     }
 
-    pub async fn get(&self, path: &str) -> Result<Value> {
+    pub fn get(&self, path: &str) -> Result<Value> {
         let url = format!("{}{}", self.base_url, path);
         debug!("GET {}", url);
 
         let resp = self
             .client
-            .get(&url, self.build_headers())
-            .await
+            .get(&url, &self.build_headers())
             .with_context(|| format!("failed to send GET {}", url))?;
 
-        let status = resp.status();
+        let status = resp.status_code();
         let text = resp
             .text()
             .with_context(|| format!("failed to read response body from GET {}", url))?;
 
-        if !status.is_success() {
+        if !resp.is_success() {
             return Err(anyhow!("HTTP {} — {}", status, text));
         }
 

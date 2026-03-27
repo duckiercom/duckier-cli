@@ -11,15 +11,13 @@ use crate::grpc::vpn::{WireguardPeer, WireguardStartRequest};
 use crate::output::Output;
 use crate::storage::{has_auth, load_wireguard, save_wireguard, WireGuardData};
 
-async fn ensure_onboarded() -> Result<()> {
+fn ensure_onboarded() -> Result<()> {
     if has_auth() {
         return Ok(());
     }
     debug!("No auth found, auto-onboarding...");
     let api = ApiClient::new();
-    crate::api::auth::onboard(&api)
-        .await
-        .context("failed to create ephemeral account")?;
+    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
     Ok(())
 }
 
@@ -65,13 +63,11 @@ pub async fn run(
     out: &Output,
 ) -> Result<i32> {
     // 1. Ensure onboarded
-    ensure_onboarded().await?;
+    ensure_onboarded()?;
 
     // 2. Fetch app config
     let api = ApiClient::new();
-    let app_config = fetch_app_config(&api, false)
-        .await
-        .context("failed to fetch app configuration")?;
+    let app_config = fetch_app_config(&api, false).context("failed to fetch app configuration")?;
 
     // 3. Select server
     let server = match select_server(&app_config.servers, &country, &city) {
@@ -113,7 +109,6 @@ pub async fn run(
             out.println("Generating WireGuard keys...");
             let kp = generate_wireguard_keys();
             let reg = register_wireguard_keys(&api, &kp.public_key, &kp.preshared_key)
-                .await
                 .context("failed to register WireGuard keys")?;
             let data = WireGuardData {
                 private_key: kp.private_key,
@@ -134,7 +129,6 @@ pub async fn run(
         &server.country_code,
         &server.city,
     )
-    .await
     .context("failed to fetch WireGuard tunnel configuration")?;
 
     // 7. Build gRPC request

@@ -7,19 +7,17 @@ use crate::brand;
 use crate::output::Output;
 use crate::storage::has_auth;
 
-async fn ensure_onboarded() -> Result<()> {
+fn ensure_onboarded() -> Result<()> {
     if has_auth() {
         return Ok(());
     }
     let api = ApiClient::new();
-    crate::api::auth::onboard(&api)
-        .await
-        .context("failed to create ephemeral account")?;
+    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
     Ok(())
 }
 
 pub async fn run(out: &Output) -> Result<i32> {
-    ensure_onboarded().await?;
+    ensure_onboarded()?;
 
     // Check if already logged in with a real account
     let auth = crate::storage::load_auth();
@@ -38,9 +36,7 @@ pub async fn run(out: &Output) -> Result<i32> {
     let api = ApiClient::new();
 
     // Get connection code — returns (code, session)
-    let (code, session) = get_connection_code(&api)
-        .await
-        .context("failed to request connection code")?;
+    let (code, session) = get_connection_code(&api).context("failed to request connection code")?;
 
     if out.is_json() {
         out.print_json(&serde_json::json!({
@@ -78,14 +74,12 @@ pub async fn run(out: &Output) -> Result<i32> {
         }
 
         match refresh_connection_code(&api, &session)
-            .await
             .context("failed while polling for login confirmation")?
         {
             Some(session_id) => {
                 debug!("Got session ID, completing login...");
 
                 let auth = login_by_session(&api, &session_id)
-                    .await
                     .context("failed to complete login after confirmation")?;
 
                 let email = &auth.email;

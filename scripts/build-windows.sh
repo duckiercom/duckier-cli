@@ -131,6 +131,7 @@ echo "  Standalone: $DIST/duckier-cli.exe"
 # Stage files for NSIS installer
 cp "$CLI_BIN" "$STAGING/duckier-cli.exe"
 cp "$DAEMON_BIN" "$STAGING/duckiervpn-daemon.exe"
+cp "$CLI_DIR/scripts/packaging/win/wireguard.dll" "$STAGING/"
 cp "$CLI_DIR/LICENSE" "$STAGING/"
 cp "$CLI_DIR/THIRD_PARTY_NOTICES.md" "$STAGING/"
 

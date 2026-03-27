@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::io::Write;
 
-use hyper::header::HeaderMap;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tracing::debug;
@@ -155,7 +155,7 @@ pub async fn run(out: &Output) -> Result<i32> {
     debug!("Checking for updates: {}", version_url);
 
     let client = HttpClient::new();
-    let resp = match client.get(&version_url, HeaderMap::new()).await {
+    let resp = match client.get(&version_url, &HashMap::new()) {
         Ok(r) => r,
         Err(e) => {
             debug!("Update check failed: {}", e);
@@ -164,8 +164,8 @@ pub async fn run(out: &Output) -> Result<i32> {
         }
     };
 
-    if !resp.status().is_success() {
-        let status = resp.status();
+    if !resp.is_success() {
+        let status = resp.status_code();
         debug!("Update server returned {}", status);
         out.error(&format!("Update server returned HTTP {}", status));
         return Ok(1);
@@ -283,10 +283,10 @@ pub async fn run(out: &Output) -> Result<i32> {
         InstallMethod::Rpm => run_rpm_upgrade(remote_version, out),
         InstallMethod::Arch => run_arch_upgrade(remote_version, out),
         InstallMethod::MacInstaller => {
-            download_and_run_installer(&client, &body, remote_version, out).await
+            download_and_run_installer(&client, &body, remote_version, out)
         }
         InstallMethod::WindowsInstaller => {
-            download_and_run_installer(&client, &body, remote_version, out).await
+            download_and_run_installer(&client, &body, remote_version, out)
         }
         InstallMethod::LinuxManual => unreachable!(),
     }
@@ -432,7 +432,7 @@ pub(crate) fn which_exists(cmd: &str) -> bool {
 }
 
 /// Download the installer package, verify its checksum, and run it.
-async fn download_and_run_installer(
+fn download_and_run_installer(
     client: &HttpClient,
     body: &Value,
     remote_version: &str,
@@ -459,13 +459,12 @@ async fn download_and_run_installer(
     debug!("Downloading installer from {}", download_url);
 
     let dl_resp = client
-        .get(download_url, HeaderMap::new())
-        .await
+        .get(download_url, &HashMap::new())
         .with_context(|| format!("failed to download installer from {}", download_url))?;
-    if !dl_resp.status().is_success() {
+    if !dl_resp.is_success() {
         out.error(&format!(
             "Failed to download update (HTTP {})",
-            dl_resp.status()
+            dl_resp.status_code()
         ));
         return Ok(1);
     }
@@ -474,7 +473,7 @@ async fn download_and_run_installer(
 
     // Verify SHA256
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    hasher.update(bytes);
     let actual_sha = hex::encode(hasher.finalize());
     if actual_sha != expected_sha {
         out.error("SHA256 checksum mismatch — aborting update");
@@ -494,7 +493,7 @@ async fn download_and_run_installer(
         let mut tmp_file = std::fs::File::create(&tmp_path)
             .with_context(|| format!("failed to create {}", tmp_path.display()))?;
         tmp_file
-            .write_all(&bytes)
+            .write_all(bytes)
             .with_context(|| format!("failed to write {}", tmp_path.display()))?;
         tmp_file
             .flush()

@@ -36,7 +36,7 @@ pub struct WgPeer {
 
 /// Register a WireGuard key pair with the backend.
 /// POST /api/wireguard/create
-pub async fn register_wireguard_keys(
+pub fn register_wireguard_keys(
     client: &ApiClient,
     pubk: &str,
     pshk: &str,
@@ -50,7 +50,6 @@ pub async fn register_wireguard_keys(
 
     let resp = client
         .post("/api/wireguard/create", &body)
-        .await
         .context("failed to register WireGuard keys")?;
 
     let config = resp
@@ -73,7 +72,7 @@ pub async fn register_wireguard_keys(
 /// Fetch a WireGuard tunnel configuration for a given server.
 /// POST /api/wireguard/get
 /// Sends raw=1 to get structured JSON (desktop format).
-pub async fn get_wireguard_config(
+pub fn get_wireguard_config(
     client: &ApiClient,
     pubk: &str,
     country: &str,
@@ -95,7 +94,6 @@ pub async fn get_wireguard_config(
 
     let resp = client
         .post("/api/wireguard/get", &body)
-        .await
         .context("failed to fetch WireGuard tunnel configuration")?;
 
     // Desktop format: { interface: { address, dns }, peer: { ... } }

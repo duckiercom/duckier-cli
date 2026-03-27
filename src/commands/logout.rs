@@ -18,7 +18,7 @@ pub async fn run(out: &Output) -> Result<i32> {
 
     let email = auth.email.clone();
     let api = ApiClient::new();
-    logout(&api).await.context("failed to log out")?;
+    logout(&api).context("failed to log out")?;
 
     if out.is_json() {
         out.print_json(&serde_json::json!({

@@ -7,7 +7,7 @@ use crate::storage::{self, AuthData};
 
 /// Create an ephemeral (anonymous) account via /api/onboarding.
 /// Returns the populated AuthData on success.
-pub async fn onboard(client: &ApiClient) -> Result<AuthData> {
+pub fn onboard(client: &ApiClient) -> Result<AuthData> {
     let body = json!({
         "deviceId": client.device_id(),
         "deviceOs": client.os_string(),
@@ -17,7 +17,6 @@ pub async fn onboard(client: &ApiClient) -> Result<AuthData> {
 
     let resp = client
         .post("/api/onboarding", &body)
-        .await
         .context("failed to onboard device")?;
 
     if resp.get("onboardingCompleted").and_then(|v| v.as_bool()) != Some(true) {
@@ -52,7 +51,7 @@ pub async fn onboard(client: &ApiClient) -> Result<AuthData> {
 
 /// Request a connection code for device linking.
 /// Returns (code, session) that the user shows on another device.
-pub async fn get_connection_code(client: &ApiClient) -> Result<(String, String)> {
+pub fn get_connection_code(client: &ApiClient) -> Result<(String, String)> {
     let body = json!({
         "deviceId": client.device_id(),
         "deviceName": client.device_name(),
@@ -61,7 +60,6 @@ pub async fn get_connection_code(client: &ApiClient) -> Result<(String, String)>
 
     let resp = client
         .post("/api/device/connectcode", &body)
-        .await
         .context("failed to request connection code")?;
 
     let code = match &resp["code"] {
@@ -80,7 +78,7 @@ pub async fn get_connection_code(client: &ApiClient) -> Result<(String, String)>
 
 /// Poll for whether the user has linked their account on the web.
 /// Returns Some(session_id) when the account is linked, None if still pending.
-pub async fn refresh_connection_code(client: &ApiClient, session: &str) -> Result<Option<String>> {
+pub fn refresh_connection_code(client: &ApiClient, session: &str) -> Result<Option<String>> {
     let body = json!({
         "session": session,
         "deviceId": client.device_id(),
@@ -90,7 +88,6 @@ pub async fn refresh_connection_code(client: &ApiClient, session: &str) -> Resul
 
     let resp = client
         .post("/api/device/connectcode/refresh", &body)
-        .await
         .with_context(|| format!("failed to refresh connection code session {}", session))?;
 
     // When the user has linked, the response contains a sessionId
@@ -105,7 +102,7 @@ pub async fn refresh_connection_code(client: &ApiClient, session: &str) -> Resul
 
 /// After the connection code is linked, log in using the session ID.
 /// Saves auth data to storage and returns it.
-pub async fn login_by_session(client: &ApiClient, session_id: &str) -> Result<AuthData> {
+pub fn login_by_session(client: &ApiClient, session_id: &str) -> Result<AuthData> {
     let body = json!({
         "sessionId": session_id,
         "deviceId": client.device_id(),
@@ -114,7 +111,6 @@ pub async fn login_by_session(client: &ApiClient, session_id: &str) -> Result<Au
 
     let resp = client
         .post("/api/device/login", &body)
-        .await
         .with_context(|| format!("failed to log in with session {}", session_id))?;
 
     if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
@@ -148,11 +144,9 @@ pub async fn login_by_session(client: &ApiClient, session_id: &str) -> Result<Au
 }
 
 /// Log out the current device from the backend and clear local credentials.
-pub async fn logout(client: &ApiClient) -> Result<()> {
+pub fn logout(client: &ApiClient) -> Result<()> {
     // Notify the backend so the session is invalidated server-side
-    let resp = client
-        .post("/api/device/logout", &serde_json::json!({}))
-        .await;
+    let resp = client.post("/api/device/logout", &serde_json::json!({}));
     debug!("Remote logout response: {:?}", resp);
 
     // Clear local state regardless of whether the remote call succeeded

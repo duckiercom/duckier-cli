@@ -6,14 +6,12 @@ use crate::api::config::{fetch_app_config, Server};
 use crate::output::Output;
 use crate::storage::has_auth;
 
-async fn ensure_onboarded() -> Result<()> {
+fn ensure_onboarded() -> Result<()> {
     if has_auth() {
         return Ok(());
     }
     let api = ApiClient::new();
-    crate::api::auth::onboard(&api)
-        .await
-        .context("failed to create ephemeral account")?;
+    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
     Ok(())
 }
 
@@ -55,12 +53,10 @@ fn group_servers(servers: &[Server]) -> Vec<ServerGroup> {
 }
 
 pub async fn run(country: Option<String>, out: &Output) -> Result<i32> {
-    ensure_onboarded().await?;
+    ensure_onboarded()?;
 
     let api = ApiClient::new();
-    let app_config = fetch_app_config(&api, false)
-        .await
-        .context("failed to load server list")?;
+    let app_config = fetch_app_config(&api, false).context("failed to load server list")?;
 
     let mut groups = group_servers(&app_config.servers);
 

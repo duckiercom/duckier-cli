@@ -45,7 +45,7 @@ pub struct AppConfig {
 
 /// Fetch the app config (server list, feature flags, user info).
 /// Uses a 1-hour cache stored via storage::save_cached_appconfig.
-pub async fn fetch_app_config(client: &ApiClient, force: bool) -> Result<AppConfig> {
+pub fn fetch_app_config(client: &ApiClient, force: bool) -> Result<AppConfig> {
     if !force {
         if let Some(cached) = storage::load_cached_appconfig() {
             if let Ok(config) = parse_app_config(&cached) {
@@ -57,7 +57,6 @@ pub async fn fetch_app_config(client: &ApiClient, force: bool) -> Result<AppConf
 
     let resp = client
         .get("/api/appconfig.json?lang=en")
-        .await
         .context("failed to fetch app configuration")?;
 
     if resp.get("data").is_none() {
