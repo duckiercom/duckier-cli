@@ -5,6 +5,36 @@ use tracing::debug;
 use super::ApiClient;
 use crate::storage::{self, AuthData};
 
+/// Make sure some account exists locally, creating an ephemeral one if not.
+/// Only checks for a stored token; whether the backend still accepts it is
+/// discovered on first use, see `recover_from_unauthorized`.
+pub fn ensure_onboarded() -> Result<()> {
+    if storage::has_auth() {
+        return Ok(());
+    }
+    debug!("No auth found, auto-onboarding...");
+    crate::api::auth::onboard(&ApiClient::new()).context("failed to create ephemeral account")?;
+    Ok(())
+}
+
+/// The backend rejected our token (expired, revoked, or the account is gone).
+/// Drops the stale credentials and the WireGuard keys registered under them,
+/// then re-onboards ephemeral accounts so the caller can retry. Returns false
+/// for linked accounts: those need the user to run `login` again.
+pub fn recover_from_unauthorized(client: &ApiClient) -> Result<bool> {
+    let auth = storage::load_auth();
+    let was_ephemeral = auth.is_ephemeral
+        || auth.email.is_empty()
+        || auth.email.contains(crate::brand::EPHEMERAL_TLD);
+    debug!("Auth token rejected by backend, clearing local credentials");
+    storage::clear_credentials().context("failed to clear stale credentials")?;
+    if !was_ephemeral {
+        return Ok(false);
+    }
+    onboard(client).context("failed to re-create ephemeral account")?;
+    Ok(true)
+}
+
 /// Create an ephemeral (anonymous) account via /api/onboarding.
 /// Returns the populated AuthData on success.
 pub fn onboard(client: &ApiClient) -> Result<AuthData> {
@@ -151,14 +181,7 @@ pub fn logout(client: &ApiClient) -> Result<()> {
 
     // Clear local state regardless of whether the remote call succeeded
     // (the user wants to log out locally even if the server is unreachable)
-    storage::save_auth(&AuthData::default()).context("failed to clear local auth state")?;
-
-    // Remove WireGuard keys
-    let wg_path = storage::config_dir().join("wireguard.json");
-    if wg_path.exists() {
-        std::fs::remove_file(&wg_path)
-            .with_context(|| format!("failed to remove {}", wg_path.display()))?;
-    }
+    storage::clear_credentials().context("failed to clear local auth state")?;
 
     // Remove cached app config
     let cache_path = storage::config_dir().join("cache/appconfig.json");

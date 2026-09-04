@@ -92,15 +92,15 @@ Section "Install"
     WriteRegStr HKLM "Software\${PRODUCT_NAME}" "InstallDir" "$INSTDIR"
     WriteRegStr HKLM "Software\${PRODUCT_NAME}" "Version" "${VERSION}"
 
-    ; ── Add to system PATH ──
+    ; ── Add to user PATH ──
     ; Uses tokenized matching: split PATH on semicolons, check for exact entry.
-    ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+    ReadRegStr $0 HKCU "Environment" "Path"
     Push $0
     Push "$INSTDIR"
     Call PathEntryExists
     Pop $2
     StrCmp $2 "0" 0 +2
-        WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" "$0;$INSTDIR"
+        WriteRegExpandStr HKCU "Environment" "Path" "$0;$INSTDIR"
 
     ; Broadcast environment change so open shells pick up new PATH
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
@@ -225,14 +225,14 @@ Section "Uninstall"
     Delete "$INSTDIR\${UNINSTALLER}"
     RMDir "$INSTDIR"
 
-    ; ── Remove from system PATH ──
+    ; ── Remove from user PATH ──
     ; Uses tokenized matching: split PATH on semicolons, rebuild without our entry.
-    ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+    ReadRegStr $0 HKCU "Environment" "Path"
     Push $0
     Push "$INSTDIR"
     Call un.RemovePathEntry
     Pop $0
-    WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" "$0"
+    WriteRegExpandStr HKCU "Environment" "Path" "$0"
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
 
     ; ── Remove registry entries ──

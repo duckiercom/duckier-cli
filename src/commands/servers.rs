@@ -4,16 +4,6 @@ use std::collections::BTreeMap;
 use crate::api::client::ApiClient;
 use crate::api::config::{fetch_app_config, Server};
 use crate::output::Output;
-use crate::storage::has_auth;
-
-fn ensure_onboarded() -> Result<()> {
-    if has_auth() {
-        return Ok(());
-    }
-    let api = ApiClient::new();
-    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
-    Ok(())
-}
 
 #[derive(Debug, Clone)]
 struct ServerGroup {
@@ -53,7 +43,7 @@ fn group_servers(servers: &[Server]) -> Vec<ServerGroup> {
 }
 
 pub async fn run(country: Option<String>, out: &Output) -> Result<i32> {
-    ensure_onboarded()?;
+    crate::api::auth::ensure_onboarded()?;
 
     let api = ApiClient::new();
     let app_config = fetch_app_config(&api, false).context("failed to load server list")?;

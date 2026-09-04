@@ -33,10 +33,6 @@ pub struct WireGuardData {
     pub public_key: String,
     #[serde(default)]
     pub preshared_key: String,
-    #[serde(default)]
-    pub ip: String,
-    #[serde(default)]
-    pub name: String,
 }
 
 pub(crate) fn config_dir() -> PathBuf {
@@ -125,6 +121,18 @@ pub fn save_auth(auth: &AuthData) -> Result<()> {
 pub fn has_auth() -> bool {
     let auth = load_auth();
     !auth.auth_token.is_empty()
+}
+
+/// Forget the account and its WireGuard keys. The keys are registered on the
+/// backend under the user, so they are useless once the account is gone.
+pub fn clear_credentials() -> Result<()> {
+    save_auth(&AuthData::default())?;
+    let wg_path = config_dir().join("wireguard.json");
+    if wg_path.exists() {
+        std::fs::remove_file(&wg_path)
+            .with_context(|| format!("failed to remove {}", wg_path.display()))?;
+    }
+    Ok(())
 }
 
 // ── WireGuard keys ──

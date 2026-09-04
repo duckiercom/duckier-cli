@@ -1,6 +1,6 @@
 [package]
 name = "duckier"
-version = "2.0.15"
+version = "2.1.5"
 description = "Duckier VPN CLI — headless client for Linux, macOS, and Windows"
 edition = "2021"
 rust-version = "1.70"

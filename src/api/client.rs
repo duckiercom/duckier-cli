@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,6 +33,29 @@ fn get_username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "user".to_string())
+}
+
+/// Non-2xx response from the backend. Kept as a typed error so callers can
+/// react to the status (401 means the stored token is dead) instead of
+/// string-matching the message.
+#[derive(Debug)]
+pub struct ApiError {
+    pub status: u16,
+    pub message: String,
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "API error ({}): {}", self.status, self.message)
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+/// True when any error in the chain is a 401 from the backend.
+pub fn is_unauthorized(err: &anyhow::Error) -> bool {
+    err.chain()
+        .any(|e| matches!(e.downcast_ref::<ApiError>(), Some(api) if api.status == 401))
 }
 
 pub struct ApiClient {
@@ -132,16 +155,7 @@ impl ApiClient {
             .with_context(|| format!("failed to read response body from POST {}", url))?;
 
         if !resp.is_success() {
-            if let Ok(error_body) = serde_json::from_str::<Value>(&text) {
-                if error_body.get("error").is_some() {
-                    return Err(anyhow!(
-                        "API error ({}): {}",
-                        status,
-                        error_body["error"].as_str().unwrap_or("unknown")
-                    ));
-                }
-            }
-            return Err(anyhow!("HTTP {} — {}", status, text));
+            return Err(Self::api_error(status, &text));
         }
 
         let json: Value = serde_json::from_str(&text)
@@ -164,11 +178,19 @@ impl ApiClient {
             .with_context(|| format!("failed to read response body from GET {}", url))?;
 
         if !resp.is_success() {
-            return Err(anyhow!("HTTP {} — {}", status, text));
+            return Err(Self::api_error(status, &text));
         }
 
         let json: Value = serde_json::from_str(&text)
             .with_context(|| format!("failed to parse JSON response from GET {}", url))?;
         Ok(json)
+    }
+
+    fn api_error(status: u16, text: &str) -> anyhow::Error {
+        let message = serde_json::from_str::<Value>(text)
+            .ok()
+            .and_then(|body| body["error"].as_str().map(str::to_string))
+            .unwrap_or_else(|| text.to_string());
+        ApiError { status, message }.into()
     }
 }

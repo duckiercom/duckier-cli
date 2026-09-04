@@ -1,25 +1,15 @@
 use anyhow::{Context, Result};
 use tracing::debug;
 
-use crate::api::client::ApiClient;
+use crate::api::client::{is_unauthorized, ApiClient};
 use crate::api::config::{fetch_app_config, Server};
-use crate::api::vpn::{get_wireguard_config, register_wireguard_keys};
+use crate::api::vpn::{get_wireguard_config, register_wireguard_keys, WgRemoteConfig};
 use crate::brand;
 use crate::crypto::generate_wireguard_keys;
 use crate::grpc::client::GrpcClient;
 use crate::grpc::vpn::{WireguardPeer, WireguardStartRequest};
 use crate::output::Output;
-use crate::storage::{has_auth, load_wireguard, save_wireguard, WireGuardData};
-
-fn ensure_onboarded() -> Result<()> {
-    if has_auth() {
-        return Ok(());
-    }
-    debug!("No auth found, auto-onboarding...");
-    let api = ApiClient::new();
-    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
-    Ok(())
-}
+use crate::storage::{load_wireguard, save_wireguard, WireGuardData};
 
 /// Flatten servers and their nested locations into a single list, then pick one.
 fn select_server(
@@ -63,7 +53,7 @@ pub async fn run(
     out: &Output,
 ) -> Result<i32> {
     // 1. Ensure onboarded
-    ensure_onboarded()?;
+    crate::api::auth::ensure_onboarded()?;
 
     // 2. Fetch app config
     let api = ApiClient::new();
@@ -99,37 +89,23 @@ pub async fn run(
         }
     }
 
-    // 5. Load or generate WireGuard keys
-    let wg_keys = match load_wireguard() {
-        Some(keys) => {
-            debug!("Using existing WireGuard keys");
-            keys
+    // 5. Register keys and fetch the tunnel config. A stored token can be
+    // dead (31-day backend TTL) while auth.json still looks fine, so on a 401
+    // drop the credentials, re-onboard ephemeral accounts and try once more.
+    let (wg_keys, wg_config) = match prepare_tunnel(&api, &server, out) {
+        Ok(v) => v,
+        Err(e) if is_unauthorized(&e) => {
+            if !crate::api::auth::recover_from_unauthorized(&api)? {
+                out.error(&format!(
+                    "Your session has expired. Run `{} login` to link your account again.",
+                    brand::BINARY_NAME
+                ));
+                return Ok(2);
+            }
+            prepare_tunnel(&api, &server, out)?
         }
-        None => {
-            out.println("Generating WireGuard keys...");
-            let kp = generate_wireguard_keys();
-            let reg = register_wireguard_keys(&api, &kp.public_key, &kp.preshared_key)
-                .context("failed to register WireGuard keys")?;
-            let data = WireGuardData {
-                private_key: kp.private_key,
-                public_key: kp.public_key,
-                preshared_key: kp.preshared_key,
-                ip: reg.ip,
-                name: reg.name,
-            };
-            save_wireguard(&data).context("failed to persist WireGuard keys")?;
-            data
-        }
+        Err(e) => return Err(e),
     };
-
-    // 6. Fetch WireGuard config from API
-    let wg_config = get_wireguard_config(
-        &api,
-        &wg_keys.public_key,
-        &server.country_code,
-        &server.city,
-    )
-    .context("failed to fetch WireGuard tunnel configuration")?;
 
     // 7. Build gRPC request
     let request = WireguardStartRequest {
@@ -197,4 +173,37 @@ pub async fn run(
             Ok(3)
         }
     }
+}
+
+/// Load or register WireGuard keys, then fetch the config for `server`.
+fn prepare_tunnel(
+    api: &ApiClient,
+    server: &Server,
+    out: &Output,
+) -> Result<(WireGuardData, WgRemoteConfig)> {
+    let wg_keys = match load_wireguard() {
+        Some(keys) => {
+            debug!("Using existing WireGuard keys");
+            keys
+        }
+        None => {
+            out.println("Generating WireGuard keys...");
+            let kp = generate_wireguard_keys();
+            register_wireguard_keys(api, &kp.public_key, &kp.preshared_key)
+                .context("failed to register WireGuard keys")?;
+            let data = WireGuardData {
+                private_key: kp.private_key,
+                public_key: kp.public_key,
+                preshared_key: kp.preshared_key,
+            };
+            save_wireguard(&data).context("failed to persist WireGuard keys")?;
+            data
+        }
+    };
+
+    let wg_config =
+        get_wireguard_config(api, &wg_keys.public_key, &server.country_code, &server.city)
+            .context("failed to fetch WireGuard tunnel configuration")?;
+
+    Ok((wg_keys, wg_config))
 }

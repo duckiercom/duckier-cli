@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "duckier"
-version = "2.0.15"
+version = "2.1.5"
 dependencies = [
  "anyhow",
  "base64",

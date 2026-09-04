@@ -5,19 +5,9 @@ use crate::api::auth::{get_connection_code, login_by_session, refresh_connection
 use crate::api::client::ApiClient;
 use crate::brand;
 use crate::output::Output;
-use crate::storage::has_auth;
-
-fn ensure_onboarded() -> Result<()> {
-    if has_auth() {
-        return Ok(());
-    }
-    let api = ApiClient::new();
-    crate::api::auth::onboard(&api).context("failed to create ephemeral account")?;
-    Ok(())
-}
 
 pub async fn run(out: &Output) -> Result<i32> {
-    ensure_onboarded()?;
+    crate::api::auth::ensure_onboarded()?;
 
     // Check if already logged in with a real account
     let auth = crate::storage::load_auth();

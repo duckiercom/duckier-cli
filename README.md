@@ -131,7 +131,7 @@ Credentials and cached data are stored in `~/.config/duckier/`:
 | File | Contents |
 |------|----------|
 | `auth.json` | Auth token, device ID, account info |
-| `wireguard.json` | WireGuard keypair and assigned tunnel IP |
+| `wireguard.json` | WireGuard keypair (tunnel address comes from the backend per connect) |
 | `cache/appconfig.json` | Server list and feature flags (1 h TTL) |
 
 ## Exit Codes

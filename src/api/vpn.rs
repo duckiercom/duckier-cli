@@ -1,16 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::debug;
 
 use super::ApiClient;
-
-/// Result of registering WireGuard keys with the backend.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WgRegistration {
-    pub ip: String,
-    pub name: String,
-}
 
 /// Remote WireGuard configuration returned by the backend (desktop/web format).
 #[derive(Debug, Clone)]
@@ -36,11 +28,9 @@ pub struct WgPeer {
 
 /// Register a WireGuard key pair with the backend.
 /// POST /api/wireguard/create
-pub fn register_wireguard_keys(
-    client: &ApiClient,
-    pubk: &str,
-    pshk: &str,
-) -> Result<WgRegistration> {
+/// The response only echoes the submitted keys; the tunnel address comes
+/// from /api/wireguard/get later.
+pub fn register_wireguard_keys(client: &ApiClient, pubk: &str, pshk: &str) -> Result<()> {
     let body = json!({
         "deviceId": client.device_id(),
         "deviceOs": client.os_string(),
@@ -52,21 +42,15 @@ pub fn register_wireguard_keys(
         .post("/api/wireguard/create", &body)
         .context("failed to register WireGuard keys")?;
 
-    let config = resp
-        .get("config")
-        .ok_or_else(|| anyhow!("missing config in wireguard/create response"))?;
+    let echoed = resp["publicKey"].as_str().unwrap_or_default();
+    if echoed != pubk {
+        return Err(anyhow!(
+            "backend confirmed a different public key than the one submitted"
+        ));
+    }
 
-    let ip = config["ip"]
-        .as_str()
-        .ok_or_else(|| anyhow!("missing ip in wireguard config"))?
-        .to_string();
-    let name = config["name"]
-        .as_str()
-        .ok_or_else(|| anyhow!("missing name in wireguard config"))?
-        .to_string();
-
-    debug!("WireGuard keys registered: ip={}, name={}", ip, name);
-    Ok(WgRegistration { ip, name })
+    debug!("WireGuard keys registered");
+    Ok(())
 }
 
 /// Fetch a WireGuard tunnel configuration for a given server.
